@@ -17,6 +17,9 @@ class tree_node:
 class RRT:
     tree_nodes= []
     edges= []
+    smooth_path=[]
+    path_dis=0
+    smooth_path_dis=0
     goal_reached=False
     path=[]
     def __init__(self, start,goal,map:str) -> None:
@@ -64,8 +67,9 @@ class RRT:
         distance=int(self.dist(q1,q2))
         mid_point=(int((q1[0]+q2[0])/2), int((q1[1]+q2[1])/2))
 
-        if q2[0]>(self.map.shape[0]-1) or q2[1]>(self.map.shape[1]-1):
+        if q2[0]>(self.map.shape[0]-1) or q2[1]>(self.map.shape[1]-1) or q2[0]<0 or q2[1]<0:
             return False
+        
         if (distance>2):
             if self.map[int(mid_point[0]),int(mid_point[1])]==1:
                 return False
@@ -77,6 +81,10 @@ class RRT:
         return self.is_segment_free(q1,mid_point) and self.is_segment_free(mid_point,q2)
 
     def extend_tree(self,q_near, q_rand, del_q):
+        if (self.dist((q_near.pos[0],q_near.pos[1]),q_rand))<del_q:
+            q_new=tree_node(q_near,q_rand)
+            return q_new
+
         theta= np.arctan2(q_rand[1]-q_near.pos[1],q_rand[0]-q_near.pos[0])
         row= np.round((q_near.pos[0]+ del_q* np.cos(theta)),2)
         col= np.round((q_near.pos[1]+ del_q* np.sin(theta)),2)
@@ -95,9 +103,9 @@ class RRT:
             q_near= self.q_nearest(q_rand)
             q_new = self.extend_tree(q_near,q_rand,del_q)
 
-            if  self.dist(q_new.pos,self.goal) < goal_thresh:
-                q_new.pos= self.goal
-                q_new.parent= q_near
+            # if  self.dist(q_new.pos,self.goal) < goal_thresh:
+            #     q_new.pos= self.goal
+            #     q_new.parent= q_near
 
 
             if self.is_segment_free(q_near.pos,q_new.pos):
@@ -116,14 +124,17 @@ class RRT:
         if self.goal_reached:
             while current_q!=self.tree_nodes[0]:
                 self.path.append(current_q.pos)
+                self.path_dis+=self.dist(current_q.pos, current_q.parent.pos)
                 current_q=current_q.parent
             if current_q==self.tree_nodes[0]:
                 self.path.append(current_q.pos)
         self.path=list(reversed(self.path))
+        print("Distance", self.path_dis)
         print(self.path)
 
     def draw_path(self):
-        plt.matshow(self.map)
+        plt.figure(1)
+        plt.matshow(self.map,fignum=1)
         plt.colorbar()
         for v in self.tree_nodes:
             plt.plot(v.pos[1], v.pos[0], 'k+')
@@ -136,14 +147,56 @@ class RRT:
         for i in range(len(self.path)):
             points[i,0]=self.path[i][1]
             points[i,1]=self.path[i][0]
-        plt.plot(points[:,0],points[:,1],'r')        
+        plt.plot(points[:,0],points[:,1],'r')
+        # plt.scatter([self.start[1],self.goal[1]],[self.start[0],self.goal[0]],c=["r","g"],marker="*") 
+        plt.plot([self.start[1]],[self.start[0]],"g*")
+        plt.plot([self.goal[1]],[self.goal[0]],"r*")
+
+        plt.figure(2)
+        plt.matshow(self.map,fignum=2)
+        plt.colorbar()
+        for v in self.tree_nodes:
+            plt.plot(v.pos[1], v.pos[0], 'k+')
+        
+        for e in self.edges:
+            plt.plot([e[0].pos[1], e[1].pos[1]],[e[0].pos[0], e[1].pos[0]] ,
+                    "g--")        
+            
+        points=np.zeros((len(self.smooth_path),2))
+        for i in range(len(self.smooth_path)):
+            points[i,0]=self.smooth_path[i][1]
+            points[i,1]=self.smooth_path[i][0]
+        plt.plot(points[:,0],points[:,1],'r')
+        print(self.goal[1])
+        # plt.scatter([self.start[1],self.goal[1]],[self.start[0],self.goal[0]],c=["r","g"],marker="*")
+        plt.plot([self.start[1]],[self.start[0]],"g*")
+        plt.plot([self.goal[1]],[self.goal[0]],"r*")
         plt.show()
 
     def smoothen_path(self):
         if len(self.path)!=0:
-            pass        
+            self.smooth_path.append(self.path[-1])
+            current_pos=self.path[-1]
+            current_index=self.path.index(current_pos)
+            while (self.path[0] in self.smooth_path) == False:
+                new_list=self.path[0:current_index]
+                for i in new_list:
+                    if (self.is_segment_free(i,current_pos)):
+                        self.smooth_path.append(i)
+                        self.smooth_path_dis+=self.dist(current_pos,i)
+                        current_pos=i
+                        current_index=self.path.index(current_pos)
+                        break
+        self.smooth_path=list(reversed(self.smooth_path))
+        print("Smooth distance:", self.smooth_path_dis)
+        print(self.smooth_path)
 
-mp=RRT((50,90),(375,375),'map3.png')
-mp.generate_RRT(20000,0.2,10,5)
+mp=RRT((10,10),(90,70),'map0.png')
+#mp=RRT((60,60),(90,60),'map1.png')                        
+#mp=RRT((8,31),(139,38),'map2.png')
+#mp=RRT((50,90),(375,375),'map3.png')
+mp.generate_RRT(10000,0.2,10,5)
 mp.generate_path()
+mp.smoothen_path()
 mp.draw_path()
+
